@@ -1,0 +1,79 @@
+# Function to get the negotiated TLS cipher suite
+function Get-TlsCipherSuite($url) {
+    $tcpClient = $null
+    $sslStream = $null
+    try {
+        $uri = [System.Uri]::new($url)
+        $tcpClient = New-Object System.Net.Sockets.TcpClient($uri.Host, $uri.Port)
+        $sslStream = New-Object System.Net.Security.SslStream($tcpClient.GetStream())
+        $sslStream.AuthenticateAsClient($uri.Host)
+
+        return $sslStream.CipherAlgorithm.ToString()
+    }
+    catch {
+        return "Error"
+    }
+    finally {
+        if ($sslStream) { $sslStream.Close() }
+        if ($tcpClient) { $tcpClient.Close() }
+    }
+}
+
+# Read URLs from CSV
+$csvFilePath = "C:\<insert_file_path>\Url.csv"
+$urls = Import-Csv -Path $csvFilePath
+
+# Process each URL
+foreach ($urlObj in $urls) {
+    $url = $urlObj.Url
+
+if ([string]::IsNullOrWhiteSpace($url)) {
+    Write-Host "URL is empty or invalid. Skipping..."
+    Write-Host "Current URL object: $urlObj"
+    continue
+}
+
+    try {
+        # Fetch HTTP status
+        $response = Invoke-WebRequest -Uri $url -UseBasicParsing
+        $httpStatus = $response.StatusCode
+
+        # Get certificate status
+        $certificate = [Net.ServicePointManager]::FindServicePoint(${url}).Certificate
+
+        Write-Host "URL: $url"
+        Write-Host "HTTP Status: $httpStatus"
+
+        if ($null -ne $certificate) {
+            $certIssuer = $certificate.Issuer
+            $certSubject = $certificate.Subject
+            $certThumbprint = $certificate.GetCertHashString()
+            $certNotBefore = $certificate.GetEffectiveDateString()
+            $certNotAfter = $certificate.GetExpirationDateString()
+
+            Write-Host "Certificate Issuer: $certIssuer"
+            Write-Host "Certificate Subject: $certSubject"
+            Write-Host "Certificate Thumbprint: $certThumbprint"
+            Write-Host "Certificate Valid From: $certNotBefore"
+            Write-Host "Certificate Valid To: $certNotAfter"
+        } else {
+            Write-Host "No SSL certificate found."
+        }
+
+        # Check TLS cipher suite
+        $cipherSuite = Get-TlsCipherSuite -url $url
+        if ($cipherSuite -eq "Error") {
+            Write-Host "Error occurred while fetching the negotiated TLS cipher suite."
+        } else {
+            Write-Host "Negotiated TLS Cipher Suite: $cipherSuite"
+        }
+    }
+ catch {
+    Write-Host "An error occurred while fetching the URL and certificate information for $($url):"
+    Write-Host $_.Exception.Message
+}
+    Write-Host "---------------------------------------------"
+}
+
+	# Wait for 5 Seconds before running script again
+	Start-Sleep -Seconds 5

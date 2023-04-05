@@ -1,0 +1,71 @@
+# ... (Functions and other script parts before the main loop)
+
+# Main loop
+while ($true) {
+    # Read URLs from CSV
+    $csvFilePath = "C:\path\to\urls.csv"
+    $urls = Import-Csv -Path $csvFilePath
+
+    # Initialize the results list
+    $results = @()
+
+    # Process each URL
+    foreach ($urlObj in $urls) {
+        $url = $urlObj.Url
+
+        if ([string]::IsNullOrWhiteSpace($url)) {
+            Write-Host "URL is empty or invalid. Skipping..."
+            Write-Host "Current URL object: $urlObj"
+            continue
+        }
+
+        # Create a result object with default values
+        $resultObj = @{
+            'URL' = $url
+            'HTTPStatus' = ''
+            'CertificateIssuer' = ''
+            'CertificateSubject' = ''
+            'CertificateThumbprint' = ''
+            'CertificateValidFrom' = ''
+            'CertificateValidTo' = ''
+            'TlsCipherSuite' = ''
+        }
+
+        try {
+            # Fetch HTTP status
+            $response = Invoke-WebRequest -Uri $url -UseBasicParsing
+            $resultObj.HTTPStatus = $response.StatusCode
+
+            # Get certificate status
+            $certificate = [Net.ServicePointManager]::FindServicePoint(${url}).Certificate
+
+            if ($null -ne $certificate) {
+                $resultObj.CertificateIssuer = $certificate.Issuer
+                $resultObj.CertificateSubject = $certificate.Subject
+                $resultObj.CertificateThumbprint = $certificate.GetCertHashString()
+                $resultObj.CertificateValidFrom = $certificate.GetEffectiveDateString()
+                $resultObj.CertificateValidTo = $certificate.GetExpirationDateString()
+            }
+
+            # Check TLS cipher suite
+            $cipherSuite = Get-TlsCipherSuite -url $url
+            if ($cipherSuite -ne "Error") {
+                $resultObj.TlsCipherSuite = $cipherSuite
+            }
+        }
+        catch {
+            Write-Host "An error occurred while fetching the URL and certificate information for $($url):"
+            Write-Host $_.Exception.Message
+        }
+
+        # Add the result object to the results list
+        $results += New-Object PSObject -Property $resultObj
+    }
+
+    # Export the results to a CSV file
+    $outputCsvFilePath = "C:\path\to\output.csv"
+    $results | Export-Csv -Path $outputCsvFilePath -NoTypeInformation
+
+    # Wait for 10 seconds before running the script again
+    Start-Sleep -Seconds 10
+}

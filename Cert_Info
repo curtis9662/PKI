@@ -1,0 +1,16 @@
+#!/bin/bash
+#get certificate information from a SINGLE URL
+# Check if URL was provided
+if [ -z "$1" ]; then
+    echo "Usage: $0 <url>"
+    exit 1
+fi
+
+# Extract the domain from the URL
+domain=$(echo $1 | awk -F/ '{print $3}')
+
+# Get the certificate info
+echo | openssl s_client -servername $domain -connect $domain:443 2>/dev/null | openssl x509 -noout -text
+____
+#You will Need to make the script executable via chmod +x then, append the url you want the OpenSSL info on afterwards like so, ./CertInfoprog https://google.com
+#Curtis Jones -  Blactec.biz
